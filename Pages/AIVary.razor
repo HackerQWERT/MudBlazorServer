@@ -1,0 +1,385 @@
+﻿@page "/AIVary"
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Diagnostics;
+@using System.Collections.ObjectModel;
+@using System.IO
+
+
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject ThemeService ThemeService
+@inject IDialogService DialogService
+
+<PageTitle>AI变换</PageTitle>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+         SignalR.AIGalaxyConnection.On<List<string>, string>(SignalR.SignalRMethod.ClientMethod.AIVary, async (imageUrlsList, message) =>
+        {
+            List<Task> tasks = new List<Task>();
+            SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1);
+            try
+            {
+                if (imageUrlsList is null)
+                    return;
+                foreach (var url in imageUrlsList)
+                {
+                    var u = url;
+
+                    //Debug.WriteLine(url);
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        HttpClient httpClient = new HttpClient();
+                        Guid guid = Guid.NewGuid();
+                        ImageModel imageModel = new ImageModel { Name = $"{guid}-Image_{DateTime.Now.ToString("yyyy_MM_dd_HH_mm_ss")}.png", Url = u };
+                        imageModel.ImageBytes = await httpClient.GetByteArrayAsync(imageModel.Url);
+
+                        var imagesrc = Convert.ToBase64String(imageModel.ImageBytes);
+                        imageModel.ImageSource = string.Format("data:image/jpeg;base64,{0}", imagesrc);
+
+                        try
+                        {
+                            await semaphoreSlim.WaitAsync();
+                            receivedImageModelList.Add(imageModel);
+                        }
+                        catch
+                        {
+                        }
+                        finally
+                        {
+                            semaphoreSlim?.Release();
+                        }
+                    }));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+                await InvokeAsync(async () =>
+                {
+                    bool? result = await DialogService.ShowMessageBox("Warning","Something Error!",yesText: "OK!", cancelText: "Cancel");
+                
+                });
+            }
+            finally
+            {
+                await Task.WhenAll(tasks);
+                processing = false;
+                await InvokeAsync(() => StateHasChanged());
+            }
+        });
+    }
+
+}
+
+
+<MudText Typo="Typo.h1">AI变换</MudText>
+
+
+
+
+@*上传图片*@
+<MudStack Style="width: 100%">
+    <MudFileUpload T="IReadOnlyList<IBrowserFile>"  Accept="Image/*" OnFilesChanged="OnInputFileChanged" Hidden="false" Class="flex-1" Style="margin-top:-5px" InputClass="absolute mud-width-full mud-height-full overflow-hidden z-20" InputStyle="opacity:0"
+                    @ondragenter="@SetDragClass" @ondragleave="@ClearDragClass" @ondragend="@ClearDragClass">
+        <ButtonTemplate>
+            <MudPaper Height="450px" Outlined="true" Elevation="5"  Class="@DragClass">
+                @if(!uploadImageModelList.Any())
+                {
+                    <div style="display: flex; justify-content: center; align-items: center; height: 400px;">
+                        <MudText Typo="Typo.h6">上传小于4M的方形图片哦</MudText>
+                    </div>
+                }
+                @foreach (var imageModel in uploadImageModelList)
+                {
+                    <div style="display: flex; justify-content: center; align-items: center; height: 400px;">
+                        <MudImage ObjectFit="ObjectFit.ScaleDown" ObjectPosition="ObjectPosition.Center" Height="400" Width="400" Src="@imageModel.ImageSource" Alt="Örebro Slott" Elevation="25" Class="rounded-lg"  />
+                    </div>
+                }
+            </MudPaper>
+        </ButtonTemplate>
+
+    </MudFileUpload>
+    @foreach (var imageModel in uploadImageModelList)
+    {
+        <MudChip Color="Color.Dark" Text="@imageModel.Name" />
+    }
+    <MudToolBar DisableGutters="true" Class="gap-4">
+        <MudButton OnClick="Clear" Disabled="@(!uploadImageModelList.Any())" Color="Color.Error" Variant="Variant.Filled">Clear</MudButton>
+    </MudToolBar>
+</MudStack>
+@code
+{
+    private static string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
+    private string DragClass = DefaultDragClass;
+    private List<ImageModel> uploadImageModelList = new List<ImageModel>();
+
+    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        uploadImageModelList.Clear();
+        ClearDragClass();
+        var files = e.GetMultipleFiles();
+        foreach (var file in files)
+        {
+            ImageModel imageModel = new ImageModel();
+            imageModel.Name = file.Name;
+
+            MemoryStream imageStream = new MemoryStream();
+            MemoryStream pngStream = new MemoryStream();
+            try
+            {
+
+                using(var stream = file.OpenReadStream(1024*1024*4))
+                {
+                    await stream.CopyToAsync(imageStream);
+                }
+                imageStream.Position=0;
+
+                SKBitmap  uploadBitmap = SKBitmap.Decode(imageStream);
+
+                //判断是否为方形
+                if (uploadBitmap.Width != uploadBitmap.Height)
+                {
+                    bool? result = await DialogService.ShowMessageBox("Warning", "图片不是方形，请上传长宽一致的图片哦!", yesText: "OK!", cancelText: "Cancel");
+                    return;
+                }
+
+                //转换为png
+                uploadBitmap.Encode(pngStream, SKEncodedImageFormat.Png, 100);
+
+                imageModel.ImageBytes = pngStream.ToArray();
+                var imagesrc = Convert.ToBase64String(imageModel.ImageBytes);
+                imageModel.ImageSource = string.Format("data:image/jpeg;base64,{0}", imagesrc);
+                uploadImageModelList.Add(imageModel);
+            }
+            catch(IOException ex)
+            {
+                bool? result = await DialogService.ShowMessageBox("Warning","图片大小超过4M!",yesText: "OK!", cancelText: "Cancel");
+                Debug.WriteLine(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                bool? result = await DialogService.ShowMessageBox("Warning", "Something Error!", yesText: "OK!", cancelText: "Cancel");
+                Debug.WriteLine(ex.Message);
+            }
+
+
+            finally
+            {
+                await imageStream.DisposeAsync();
+                await pngStream.DisposeAsync();
+            }
+        }
+    }
+
+    private async Task Clear()
+    {
+        uploadImageModelList.Clear();
+        ClearDragClass();
+        await Task.Delay(100);
+    }
+
+
+    private void SetDragClass()
+    {
+        DragClass = $"{DefaultDragClass} mud-border-primary";
+    }
+
+    private void ClearDragClass()
+    {
+        DragClass = DefaultDragClass;
+    }
+
+
+}
+
+
+
+
+@*变换数量*@
+<br />
+<MudSlider @bind-Value="@varyImageCountValue" Size="Size.Medium" Step="1" Min="1" Max="10" Variant="Variant.Filled" TickMarks="true" ValueLabel="true">
+    <MudText Typo="Typo.h5">变换数量: @varyImageCountValue.ToString()</MudText>
+</MudSlider>
+@code {
+    public int varyImageCountValue = 7;
+
+}
+
+
+
+
+@*变换分辨率:*@
+<br />
+<br />
+<MudText Typo="Typo.h5">变换分辨率: @varyImageResolution</MudText>
+<MudForm>
+    <MudRadioGroup @bind-SelectedOption="@varyImageResolution">
+        <MudRadio Option="@("256x256")" Color="Color.Success" UnCheckedColor="Color.Error" Size="Size.Large">256x256</MudRadio>
+        <MudRadio Option="@("512x512")" Color="Color.Primary" UnCheckedColor="Color.Error" Size="Size.Large">512x512</MudRadio>
+        <MudRadio Option="@("1024x1024")" Color="Color.Info" UnCheckedColor="Color.Error" Size="Size.Large">1024x1024</MudRadio>
+    </MudRadioGroup>
+</MudForm>
+@code {
+    public string varyImageResolution { get; set; }
+}
+
+
+
+
+@*变换按钮*@
+<br />
+<MudButton Style="width:100%;height:50px;" Disabled="processing" OnClick="ProcessSomething" Variant="Variant.Filled" Color="Color.Primary">
+    @if (processing)
+    {
+        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+        <MudText Class="ms-2">>Varying....</MudText>
+    }
+    else
+    {
+        <MudText>Vary!</MudText>
+    }
+</MudButton>
+@code
+{
+    async Task ProcessSomething()
+    {
+        if (processing)
+            return;
+        if ( SignalR.AIGalaxyConnection.State is not HubConnectionState.Connected)
+        {
+            bool? result = await DialogService.ShowMessageBox(
+             "warning",
+             "未连接到服务器,请稍后再试或刷新页面",
+             yesText: "ok!", cancelText: "cancel");
+            return;
+        }
+        if (!uploadImageModelList.Any())
+        {
+            bool? result = await DialogService.ShowMessageBox(
+                "Warning",
+                "请上传一张照片哦!",
+                yesText: "OK!", cancelText: "Cancel");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(varyImageResolution))
+        {
+            bool? result = await DialogService.ShowMessageBox(
+                "Warning",
+                "请选择分辨率!",
+                yesText: "OK!", cancelText: "Cancel");
+            return;
+        }
+
+
+        varyImageCountValue = Math.Clamp(varyImageCountValue, 1, 10);
+        try
+        {
+            receivedImageModelList.Clear();
+            processing = true;
+            foreach(var imageModel in  uploadImageModelList)
+            {
+                await  SignalR.AIGalaxyConnection.SendAsync(SignalR.SignalRMethod.ServerMethod.AIVary,  SignalR.AIGalaxyConnection.ConnectionId, imageModel.ImageBytes, varyImageCountValue, varyImageResolution, null);
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex.Message);
+        }
+    }
+
+    private void A()
+    {
+        //Upload the files here
+        Snackbar.Configuration.PositionClass = Defaults.Classes.Position.TopCenter;
+        Snackbar.Add("TODO: Upload your files!", Severity.Normal);
+    }
+}
+
+
+
+
+@*展示图片*@
+<br />
+<br />
+<br />
+<br />
+<MudPaper Class="pa-8 ma-2" Elevation="4">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <MudSpacer />
+        <div style="display: flex;">
+            <MudFab StartIcon="@Icons.Material.Filled.DeleteOutline" Label="Delete" OnClick="DeleteAsync" Color=" Color.Secondary" />
+            <MudFab StartIcon="@Icons.Material.Filled.Save" Color="Color.Primary" Label="Save" OnClick="SaveAsync" />
+        </div>
+    </div>
+    <br />
+    <br />
+    <br />
+    <br />
+    <MudGrid Justify="Justify.Center" Spacing="40">
+        @foreach (var image in receivedImageModelList)
+        {
+            <MudItem xs="4">
+                <MudImage ObjectFit=" ObjectFit.ScaleDown" ObjectPosition="ObjectPosition.Center" Height="350" Width="350" Src="@image.ImageSource" Alt="Örebro Slott" Elevation="25" Class="rounded-lg" />
+                <br />
+                <br />
+            </MudItem>
+        }
+    </MudGrid>
+</MudPaper>
+@code {
+    private List<ImageModel> receivedImageModelList = new List<ImageModel>();
+    private bool processing = false;
+
+    private async Task DeleteAsync()
+    {
+
+        bool? result = await DialogService.ShowMessageBox("Warning", "确定要清空图片吗?清空后无法恢复哦", yesText: "Delete", cancelText: "Cancel");
+        if (result is null or not true) 
+            return;
+
+        receivedImageModelList.Clear();
+        //await InvokeAsync(()=>StateHasChanged());
+    }
+
+
+
+    private async Task SaveAsync()
+    {
+        foreach (var imageModel in receivedImageModelList)
+        {
+            ImageModel temporaryImageModel=imageModel;
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    
+                    await DownloadFileFromStream(temporaryImageModel.Name, temporaryImageModel.ImageBytes);
+                }
+                catch(Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                }
+            });
+        }
+        //await InvokeAsync(()=>StateHasChanged());
+    }
+
+
+    private async Task DownloadFileFromStream(string imageName, byte[] imageBytes)
+    {
+        var fileStream = new MemoryStream(imageBytes);
+
+
+        using var streamRef = new DotNetStreamReference(stream: fileStream);
+
+        await JS.InvokeVoidAsync("DownloadFileFromStream", imageName, streamRef);
+    }
+}
+
+
+

@@ -1,0 +1,139 @@
+﻿@using Microsoft.AspNetCore.SignalR.Client;
+@using System.Diagnostics;
+@inherits LayoutComponentBase
+@inject ThemeService ThemeService
+@inject IDialogService DialogService
+@implements IAsyncDisposable
+
+
+<MudThemeProvider @bind-IsDarkMode="ThemeService.IsDarkMode"  />
+
+<MudDialogProvider FullWidth="true"
+                   MaxWidth="MaxWidth.ExtraSmall"
+                   CloseButton="true"
+                   DisableBackdropClick="false"
+                   NoHeader="false"
+                   Position="DialogPosition.Center"
+                   CloseOnEscapeKey="true" />
+<MudSnackbarProvider />
+
+@code {
+    public class ImageErrorJson
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public Error error { get; set; }
+    }
+    public class Error
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string code { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string message { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string param { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string type { get; set; }
+    }
+}
+
+
+@code
+{
+
+    protected override async Task OnInitializedAsync()
+    {
+        string url = $"{SignalR.WebsocketUrl}:{SignalR.Port}/{SignalR.AIGalaxyHub}";
+        SignalR.AIGalaxyConnection = new HubConnectionBuilder()
+                .WithUrl(url)
+                .WithAutomaticReconnect()
+                .Build();
+        //AIGalaxyConnection = new HubConnectionBuilder()
+        //    .WithUrl(Navigation.ToAbsoluteUri(("/" + SignalR.AIGenerateHub)))
+        //    .WithAutomaticReconnect()
+        //    .Build();
+        try
+        {
+            if (SignalR.AIGalaxyConnection.State is not HubConnectionState.Connected)
+            await SignalR.AIGalaxyConnection.StartAsync();
+
+        }
+        //catch (HttpRequestException ex)
+        //{
+        //    bool? result = await DialogService.ShowMessageBox(
+        //    "Warning",
+        //     ex.Message,
+        //    yesText: "OK!", cancelText: "Cancel");
+        //}
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex.Message);
+        }
+        Task.Run(() => CheckConnectionAndReconnectToServerAsync());
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if ( SignalR.AIGalaxyConnection is not null)
+        {
+            await SignalR.AIGalaxyConnection.DisposeAsync();
+        }
+    }
+    private async Task CheckConnectionAndReconnectToServerAsync()
+    {
+        while (true)
+        {
+            await Task.Delay(1000);
+            if (SignalR.AIGalaxyConnection.State is not HubConnectionState.Connected)
+            {
+                try
+                {
+                    await SignalR.AIGalaxyConnection.StopAsync();
+                    await SignalR.AIGalaxyConnection.StartAsync();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                }
+            }
+
+        }
+
+
+
+    }
+
+}
+      
+
+<MudLayout>
+    <MudAppBar Elevation="0">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudSpacer />
+        <MudToggleIconButton @bind-Toggled="@ThemeService.IsDarkMode"
+                             Icon="@Icons.Material.Filled.Brightness7" Color="@Color.Success" Title="Light" 
+                             ToggledIcon="@Icons.Material.Filled.Brightness3" ToggledColor="@Color.Primary" ToggledTitle="Dark"/>
+
+      <MudIconButton Icon="@Icons.Custom.Brands.MudBlazor" Color="Color.Inherit" Link="https://mudblazor.com/" Target="_blank" />
+        <MudIconButton Icon="@Icons.Custom.Brands.GitHub" Color="Color.Inherit" Link="https://github.com/MudBlazor/MudBlazor/" Target="_blank" />
+        @*<MudAvatar Color="Color.Primary" Style="margin-right:5px">M</MudAvatar>*@
+        <MudAvatar Color="Color.Secondary" Style="margin-right:5px">U</MudAvatar>
+        @*<MudAvatar Color="Color.Tertiary" Style="margin-right:5px">D</MudAvatar>*@
+    </MudAppBar>
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="1">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">AI Galaxy</MudText>
+        </MudDrawerHeader>
+        <NavMenu />
+        @*<MudButton Variant="Variant.Filled" StakrtIcon="@Icons.Material.Filled.ArrowUpward">Go to top</MudButton>*@
+    </MudDrawer>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="my-16 pt-16">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    public bool IsDarkMode { get; set; }
+}

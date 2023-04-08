@@ -1,0 +1,310 @@
+﻿@page "/AIGenerate"
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Diagnostics;
+@using System.Collections.ObjectModel;
+@using System.IO
+
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject ThemeService ThemeService
+@inject IDialogService DialogService
+
+<PageTitle>AI绘画</PageTitle>
+
+@code {
+    public class ImageErrorJson
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public Error error { get; set; }
+    }
+    public class Error
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string code { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string message { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string param { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.Never)] public string type { get; set; }
+    }
+}
+
+
+@code {
+    
+    protected override async Task OnInitializedAsync()
+    {
+         SignalR.AIGalaxyConnection.On<List<string>, string>(SignalR.SignalRMethod.ClientMethod.AIGenerate, async (imageUrlsList, message) =>
+        {
+            List<Task> tasks = new List<Task>();
+            SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1);
+
+            try
+            {
+                if(message is not "Success")
+                {
+                    var imageErrorJson = JsonSerializer.Deserialize<ImageErrorJson>(message);
+                    if (imageErrorJson.error.message is "Your request was rejected as a result of our safety system. Your prompt may contain text that is not allowed by our safety system.")
+                    {
+                        await InvokeAsync(async() =>{
+                            bool? result = await DialogService.ShowMessageBox("Warning", "虎狼之词!", yesText: "OK!", cancelText: "Cancel");
+                        });
+                    }
+                    else if (imageErrorJson.error.message.Contains("is too long - 'prompt'"))
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            bool? result = await DialogService.ShowMessageBox("Warning", "提示词太长!", yesText: "OK!", cancelText: "Cancel");
+                        });
+                    }
+                    else
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            bool? result = await DialogService.ShowMessageBox("Warning", imageErrorJson.error.message, yesText: "OK!", cancelText: "Cancel");
+                        });
+                    }
+                    return;
+                }
+                if (imageUrlsList is null)
+                    return;
+                foreach(var url in imageUrlsList)
+                {
+                    var u = url;
+                    //Debug.WriteLine(url);
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        HttpClient httpClient = new HttpClient();
+                        Guid guid = Guid.NewGuid();
+                        ImageModel imageModel = new ImageModel { Name = $"{guid}-Image_{DateTime.Now.ToString("yyyy_MM_dd_HH_mm_ss")}.png", Url = u };
+                        imageModel.ImageBytes = await httpClient.GetByteArrayAsync(imageModel.Url);
+
+                        var imagesrc = Convert.ToBase64String(imageModel.ImageBytes);
+                        imageModel.ImageSource = string.Format("data:image/jpeg;base64,{0}", imagesrc);
+
+                        try
+                        {
+                            await semaphoreSlim.WaitAsync();
+                            receivedImageModelList.Add(imageModel);
+                        }
+                        catch
+                        {
+                        }
+                        finally
+                        {
+                            semaphoreSlim?.Release();
+                        }
+                    }));
+                }
+            }   
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+                bool? result = await DialogService.ShowMessageBox("Warning","Something Error!", yesText: "OK!", cancelText: "Cancel");
+            }
+            finally
+            {
+                await Task.WhenAll(tasks);
+                processing = false;
+                await InvokeAsync(() => StateHasChanged());
+            }
+        });
+     
+    }
+
+}
+
+
+<MudText Typo="Typo.h1">AI创造</MudText>
+
+
+
+@*输入Prompt*@
+<MudTextField @ref="MudTextField" @bind-Value="@prompt"   OnKeyPress="OnMudTextFieldKeyPressd" Immediate="true" Label="提示" Clearable="true" Variant="Variant.Filled"></MudTextField>
+@code
+{
+    private string prompt;
+    private MudTextField<string> MudTextField;
+    private async Task OnMudTextFieldKeyPressd(KeyboardEventArgs keyboardEventArgs)
+    {
+        if(keyboardEventArgs.Key is "Enter")
+        {
+            await ProcessSomething();
+        }
+    }
+}
+
+
+
+
+@*创造数量*@
+<br />
+<MudSlider @bind-Value="@generateImageCountValue"  Size="Size.Medium" Step="1" Min="1" Max="10" Variant="Variant.Filled" TickMarks="true" ValueLabel="true">
+    <MudText Typo="Typo.h5">创造数量: @generateImageCountValue.ToString()</MudText>
+</MudSlider>
+@code {
+    public int generateImageCountValue = 7 ;
+
+}
+
+
+
+
+@*创造分辨率:*@
+<br />
+<br />
+<MudText Typo="Typo.h5">创造分辨率: @generateImageResolution</MudText>
+<MudForm>
+    <MudRadioGroup @bind-SelectedOption="@generateImageResolution">
+        <MudRadio Option="@("256x256")" Color="Color.Success" UnCheckedColor="Color.Error" Size="Size.Large">256x256</MudRadio>
+        <MudRadio Option="@("512x512")" Color="Color.Primary" UnCheckedColor="Color.Error" Size="Size.Large">512x512</MudRadio>
+        <MudRadio Option="@("1024x1024")" Color="Color.Info" UnCheckedColor="Color.Error" Size="Size.Large">1024x1024</MudRadio>
+    </MudRadioGroup>
+</MudForm>
+@code {
+    public string generateImageResolution { get; set; }
+}
+
+
+
+
+
+
+@*创造按钮*@
+<br />
+<MudButton Style="width:100%;height:50px;" Disabled="processing" OnClick="ProcessSomething" Variant="Variant.Filled" Color="Color.Primary">
+    @if (processing)
+    {
+        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+        <MudText Class="ms-2">>Creating....</MudText>
+    }
+    else
+    {
+        <MudText>Create!</MudText>
+    }
+</MudButton>
+@code
+{
+    private bool processing = false;
+
+    async Task ProcessSomething()
+    {
+        if(processing)
+            return;
+        if ( SignalR.AIGalaxyConnection.State is not HubConnectionState.Connected)
+        {
+            bool? result = await DialogService.ShowMessageBox(
+             "warning",
+             "未连接到服务器,请稍后再试或刷新页面",
+             yesText: "ok!", cancelText: "cancel");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            bool? result = await DialogService.ShowMessageBox("Warning","请输入提示词哦",yesText: "OK!", cancelText: "Cancel");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(generateImageResolution))
+        {
+            bool? result = await DialogService.ShowMessageBox(
+                "Warning",
+                "请选择分辨率!",
+                yesText: "OK!", cancelText: "Cancel");
+            return;
+        }
+
+
+        generateImageCountValue = Math.Clamp(generateImageCountValue, 1, 10);
+        try
+        {
+            receivedImageModelList.Clear();
+            processing = true;
+
+            await  SignalR.AIGalaxyConnection.SendAsync(SignalR.SignalRMethod.ServerMethod.AIGenerate,  SignalR.AIGalaxyConnection.ConnectionId, prompt, generateImageCountValue, generateImageResolution, null);
+            await InvokeAsync(async ()=> await MudTextField.Clear());
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex.Message);
+        }
+    }
+}
+
+
+
+
+@*展示图片*@
+<br />
+<br />
+<br />
+<br />
+<MudPaper Class="pa-8 ma-2" Elevation="4">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <MudSpacer/>
+        <div style="display: flex;">
+            <MudFab StartIcon="@Icons.Material.Filled.DeleteOutline" Label="Delete" OnClick="DeleteAsync" Color=" Color.Secondary" />
+            <MudFab StartIcon="@Icons.Material.Filled.Save" Color="Color.Primary" Label="Save" OnClick="SaveAsync" />
+        </div>
+    </div>
+    <br />
+    <br />
+    <br />
+    <br />
+    <MudGrid  Justify="Justify.Center" Spacing="40" >
+        @foreach (var image in receivedImageModelList)
+        {
+            <MudItem xs="4"  >
+                <MudImage ObjectFit="ObjectFit.ScaleDown" ObjectPosition="ObjectPosition.Center" Height=350 Width="350" Src="@image.ImageSource" Alt="Örebro Slott" Elevation="25" Class="rounded-lg" />
+                <br />
+                <br />
+            </MudItem>
+        }
+    </MudGrid>
+</MudPaper>
+@code {
+    private List<ImageModel> receivedImageModelList = new List<ImageModel>();
+
+    private async Task DeleteAsync()
+    {
+
+        bool? result = await DialogService.ShowMessageBox("Warning", "确定要清空图片吗?清空后无法恢复哦", yesText: "Delete", cancelText: "Cancel");
+        if (result is null or not true)
+            return ;
+        await InvokeAsync(() => receivedImageModelList.Clear());
+        //await InvokeAsync(()=>StateHasChanged());
+    }
+
+
+
+    private async Task SaveAsync()
+    {
+        foreach(var imageModel in receivedImageModelList)
+        {
+            ImageModel temporaryImageModel = imageModel;
+
+            Task.Run(async () =>
+            {
+                try
+                {
+
+                    await DownloadFileFromStream(temporaryImageModel.Name, temporaryImageModel.ImageBytes);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                }
+            });
+        }
+        //await InvokeAsync(()=>StateHasChanged());
+    }
+
+
+    private async Task DownloadFileFromStream(string imageName,byte[] imageBytes)
+    {
+        var fileStream = new MemoryStream(imageBytes);
+
+
+        using var streamRef = new DotNetStreamReference(stream: fileStream);
+
+        await JS.InvokeVoidAsync("DownloadFileFromStream", imageName, streamRef);
+    }
+}
+
+
+
