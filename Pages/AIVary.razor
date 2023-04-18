@@ -4,7 +4,6 @@
 @using System.Collections.ObjectModel;
 @using System.IO
 
-
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -137,7 +136,7 @@
                 }
                 imageStream.Position=0;
 
-                SKBitmap  uploadBitmap = SKBitmap.Decode(imageStream);
+                SKBitmap uploadBitmap= SKBitmap.Decode(imageStream);
 
                 //判断是否为方形
                 if (uploadBitmap.Width != uploadBitmap.Height)
@@ -162,6 +161,7 @@
             catch (Exception ex)
             {
                 bool? result = await DialogService.ShowMessageBox("Warning", "Something Error!", yesText: "OK!", cancelText: "Cancel");
+                bool? result1 = await DialogService.ShowMessageBox("Warning", ex.Message, yesText: "OK!", cancelText: "Cancel");
                 Debug.WriteLine(ex.Message);
             }
 

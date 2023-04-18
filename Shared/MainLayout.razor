@@ -1,9 +1,11 @@
 ﻿@using Microsoft.AspNetCore.SignalR.Client;
 @using System.Diagnostics;
+
 @inherits LayoutComponentBase
 @inject ThemeService ThemeService
 @inject IDialogService DialogService
 @implements IAsyncDisposable
+@inject NavigationManager Navigation
 
 
 <MudThemeProvider @bind-IsDarkMode="ThemeService.IsDarkMode"  />
@@ -37,28 +39,21 @@
 
     protected override async Task OnInitializedAsync()
     {
-        string url = $"{SignalR.WebsocketUrl}:{SignalR.Port}/{SignalR.AIGalaxyHub}";
+        //string url = $"{SignalR.WebsocketUrl}:{SignalR.Port}/{SignalR.AIGalaxyHub}";
+        //SignalR.AIGalaxyConnection = new HubConnectionBuilder()
+        //        .WithUrl(url)
+        //        .WithAutomaticReconnect()
+        //        .Build();
         SignalR.AIGalaxyConnection = new HubConnectionBuilder()
-                .WithUrl(url)
-                .WithAutomaticReconnect()
-                .Build();
-        //AIGalaxyConnection = new HubConnectionBuilder()
-        //    .WithUrl(Navigation.ToAbsoluteUri(("/" + SignalR.AIGenerateHub)))
-        //    .WithAutomaticReconnect()
-        //    .Build();
+            .WithUrl(Navigation.ToAbsoluteUri(("/" + SignalR.AIGalaxyHub)))
+            .WithAutomaticReconnect()
+            .Build();
         try
         {
             if (SignalR.AIGalaxyConnection.State is not HubConnectionState.Connected)
             await SignalR.AIGalaxyConnection.StartAsync();
 
         }
-        //catch (HttpRequestException ex)
-        //{
-        //    bool? result = await DialogService.ShowMessageBox(
-        //    "Warning",
-        //     ex.Message,
-        //    yesText: "OK!", cancelText: "Cancel");
-        //}
         catch (Exception ex)
         {
             Debug.WriteLine(ex.Message);
@@ -108,9 +103,9 @@
                              ToggledIcon="@Icons.Material.Filled.Brightness3" ToggledColor="@Color.Primary" ToggledTitle="Dark"/>
 
       <MudIconButton Icon="@Icons.Custom.Brands.MudBlazor" Color="Color.Inherit" Link="https://mudblazor.com/" Target="_blank" />
-        <MudIconButton Icon="@Icons.Custom.Brands.GitHub" Color="Color.Inherit" Link="https://github.com/MudBlazor/MudBlazor/" Target="_blank" />
+        <MudIconButton Icon="@Icons.Custom.Brands.GitHub" Color="Color.Inherit" Link="https://github.com/HackerQWERT/MudBlazorServer" Target="_blank" />
         @*<MudAvatar Color="Color.Primary" Style="margin-right:5px">M</MudAvatar>*@
-        <MudAvatar Color="Color.Secondary" Style="margin-right:5px">U</MudAvatar>
+        @*<MudAvatar Color="Color.Secondary" Style="margin-right:5px">U</MudAvatar>*@
         @*<MudAvatar Color="Color.Tertiary" Style="margin-right:5px">D</MudAvatar>*@
     </MudAppBar>
     <MudDrawer @bind-Open="_drawerOpen" Elevation="1">

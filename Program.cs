@@ -18,7 +18,6 @@ global using MudBlazorServer.Hubs;
 global using MudBlazorServer.Services;
 
 global using SkiaSharp;
-global using Markdig;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,7 +32,7 @@ builder.Services.AddSingleton<WeatherForecastService>();
 builder.Services.AddSingleton<ThemeService>();
 
 builder.Services.AddSignalR();
-builder.Services.AddSignalR().AddHubOptions<AIVaryHub>(options =>
+builder.Services.AddSignalR().AddHubOptions<AIGalaxyHub>(options =>
 {
     options.MaximumReceiveMessageSize = 5 * 1024 * 1024; // 5MB
 });
@@ -49,6 +48,11 @@ builder.Services.AddResponseCompression(opts =>
 
 
 var app = builder.Build();
+//app.Urls.Add("http://43.155.129.173:19999");
+app.Urls.Add("http://0.0.0.0:19999");
+//app.Urls.Add("http://172.23.12.137:19999");
+//app.Urls.Add("http://127.0.0.1:9997");
+//app.Urls.Add("http://192.168.10.15:19999");
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -74,9 +78,7 @@ app.UseRouting();
 
 app.MapBlazorHub(); 
 
-app.MapHub<AIChatHub>("/AIChatHub");
-app.MapHub<AIGenerateHub>("/AIGenerateHub");
-app.MapHub<AIVaryHub>("/AIVaryHub");
+app.MapHub<AIGalaxyHub>("/AIGalaxyHub");
 
 app.MapFallbackToPage("/_Host");
 

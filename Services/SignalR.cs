@@ -11,16 +11,8 @@ public class SignalR
         get => aIGalaxyConnection;
         set => aIGalaxyConnection = value;
     }
-    public static bool IsDalleBusy { get; set; } = false;
-
-    public static string WebsocketUrl { get; set; } = "http://43.155.129.173"; 
-    public static string Port { get; set; } = "9999";
-    public static string AIGenerateHub { get; set; } = "AIGenerateHub";
     public static string AIGalaxyHub { get; set; } = "AIGalaxyHub";
-    public static string AIVaryHub { get; set; } = "AIVaryHub";
-    public static string AIChatHub { get; set; } = "AIChatHub";
-
-
+    
     public static class SignalRMethod
     {
 

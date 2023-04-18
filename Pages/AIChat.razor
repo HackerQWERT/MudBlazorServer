@@ -188,8 +188,6 @@
     private string userMessage=string.Empty;
     private bool processing = false;
 
-    //private int lines = 1;
-
     private async Task OnUserMessageTextFieldKeyPressd(KeyboardEventArgs keyboardEventArgs)
     {
 
@@ -197,13 +195,6 @@
         {
             SendMessage();
         }
-        
-        //if (userMessage?.Contains("\n") ?? false)
-        //{
-        //    lines = userMessage.Split('\n').Length - 1; // 减去最后一个空行
-        //    lines = Math.Clamp(lines,1,5);
-        //    await InvokeAsync(()=>StateHasChanged());
-        //}
     }
 
     private async Task SendMessage()
