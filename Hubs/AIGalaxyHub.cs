@@ -3,7 +3,7 @@ namespace MudBlazorServer.Hubs;
 
 public class AIGalaxyHub : Hub
 {
-    string apiKey = "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";
+    string apiKey = "YOUR API KEYS";
     string varyApiUrl = "https://api.openai.com/v1/images/variations";
     string generationApiUrl = "https://api.openai.com/v1/images/generations";
     string chatApiUrl = "https://api.openai.com/v1/chat/completions";
@@ -153,7 +153,7 @@ public class AIGalaxyHub : Hub
         public List<Url>? data { get; set; }
     }
 
-    //反序列化类
+    //路麓脨貌脕脨禄炉脌脿
     public class Url
     {
         public string? url { get; set; }
