@@ -3,7 +3,7 @@ namespace MudBlazorServer.Hubs;
 
 public class AIGalaxyHub : Hub
 {
-    string apiKey = "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";
+    string apiKey = "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";
     string varyApiUrl = "https://api.openai.com/v1/images/variations";
     string generationApiUrl = "https://api.openai.com/v1/images/generations";
     string chatApiUrl = "https://api.openai.com/v1/chat/completions";

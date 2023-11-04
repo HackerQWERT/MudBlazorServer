@@ -172,6 +172,8 @@
                 await pngStream.DisposeAsync();
             }
         }
+    
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task Clear()
