@@ -135,11 +135,11 @@
 
 @*创造数量*@
 <br />
-<MudSlider @bind-Value="@generateImageCountValue"  Size="Size.Medium" Step="1" Min="1" Max="10" Variant="Variant.Filled" TickMarks="true" ValueLabel="true">
+<MudSlider @bind-Value="@generateImageCountValue"  Size="Size.Medium" Step="1" Min="1" Max="10" Variant="Variant.Filled"   Disabled="true" TickMarks="true" ValueLabel="true">
     <MudText Typo="Typo.h5">创造数量: @generateImageCountValue.ToString()</MudText>
 </MudSlider>
 @code {
-    public int generateImageCountValue = 7 ;
+    public int generateImageCountValue = 1 ;
 
 }
 

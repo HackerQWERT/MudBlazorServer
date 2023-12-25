@@ -3,7 +3,13 @@ namespace MudBlazorServer.Hubs;
 
 public class AIGalaxyHub : Hub
 {
-    string apiKey = "YOUR API KEYS";
+    //string apiKey = "sk-st9GsV8I1farWlbU351b18CbD561439bA07d2f1c2a6d2284";
+    string apiKey = "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";
+
+
+    //string varyApiUrl = "https://oneapi.xty.app/v1/images/variations";
+    //string generationApiUrl = "https://oneapi.xty.app/v1/images/generations";
+    //string chatApiUrl = "https://oneapi.xty.app/v1/chat/completions";
     string varyApiUrl = "https://api.openai.com/v1/images/variations";
     string generationApiUrl = "https://api.openai.com/v1/images/generations";
     string chatApiUrl = "https://api.openai.com/v1/chat/completions";
@@ -60,6 +66,7 @@ public class AIGalaxyHub : Hub
 
         var data = new
         {
+            model = "dall-e-3",
             n = n,
             prompt = prompt,
             size = size,
